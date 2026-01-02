@@ -1,6 +1,5 @@
 # LeakSanitizer suppressions for false positives from macOS system libraries.
-# 
-# Some changes were merged upstream and have yet to be released in a stable clang/llvm version.
+# Some patches were already merged upstream and have yet to be released in a stable Clang/LLVM version.
 
 leak:_fetchInitializingClassList
 # thread-local storage used by Objective-C runtime
