@@ -77,3 +77,4 @@ leak:__CPSNoticeNewConnection_block_invoke
 leak:_MyCFXPCCreateCFObjectFromXPCObject
 leak:WMClientWindowManager
 leak:message_handler_message
+leak:_LSASNCreateWithUInt64
