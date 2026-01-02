@@ -18,7 +18,13 @@ run-leaks: lint
 	cmake -B $(LEAKS_BUILD_DIR) -S . -DDISABLE_ASAN=ON
 	cmake --build $(LEAKS_BUILD_DIR) -j$(shell sysctl -n hw.ncpu)
 	codesign -s - -f --entitlements entitlements.plist $(LEAKS_BUILD_DIR)/binary
-	tools/filter_leaks.py leaks --atExit --list --groupByType -- $(LEAKS_BUILD_DIR)/binary
+	leaks --atExit --list --groupByType \
+		-exclude _glfwDestroyWindowCocoa \
+		-exclude _glfwPollEventsCocoa \
+		-exclude _glfwInitCocoa \
+		-exclude _glfwCreateWindowCocoa \
+		-exclude __createContextTelemetryDataWithQueueLabelAndCallstack_block_invoke \
+		-- $(LEAKS_BUILD_DIR)/binary
 
 TEST_BUILD_DIR := $(PWD)/build/test
 .PHONY: test

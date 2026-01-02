@@ -10,7 +10,7 @@ int main() {
     InitWindow(800, 450, "raylib [core] example - basic window");
     SetTargetFPS(60);
 
-    while (!WindowShouldClose())    // Detect window close button or ESC key
+    while (!WindowShouldClose()) // Detect window close button or ESC key
     {
         BeginDrawing();
         ClearBackground(RAYWHITE);
