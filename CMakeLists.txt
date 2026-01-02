@@ -1,14 +1,6 @@
 cmake_minimum_required(VERSION 3.27 FATAL_ERROR)
 project(defer LANGUAGES CXX)
 
-if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-  message(STATUS "Defaulting build type to Debug.")
-  set(CMAKE_BUILD_TYPE
-      Debug
-      CACHE STRING "" FORCE
-  )
-endif()
-
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -28,6 +20,14 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   if(EXISTS "${LIBCXX_DIR}")
     add_link_options(-L${LIBCXX_DIR} -Wl,-rpath,${LIBCXX_DIR})
   endif()
+endif()
+
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+  message(STATUS "Defaulting build type to Debug.")
+  set(CMAKE_BUILD_TYPE
+      Debug
+      CACHE STRING "" FORCE
+  )
 endif()
 
 #
