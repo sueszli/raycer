@@ -137,7 +137,7 @@ list(FILTER SRCS EXCLUDE REGEX "src/main\\.cpp$")
 add_library(lib ${SRCS})
 target_include_directories(lib PUBLIC src)
 add_executable(binary src/main.cpp)
-target_link_libraries(binary PRIVATE lib)
+target_link_libraries(binary PRIVATE lib raylib)
 
 #
 # tests
