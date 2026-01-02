@@ -28,9 +28,6 @@ add_compile_options(
   -Wsign-conversion
   -Wimplicit-fallthrough
   -Werror=format-security
-  -Wold-style-cast
-  -Wnon-virtual-dtor
-  -Woverloaded-virtual
   # more portable and explicit than -fhardened
   -U_FORTIFY_SOURCE
   -D_FORTIFY_SOURCE=3
@@ -99,8 +96,9 @@ endif()
 #
 
 include(FetchContent)
+
 FetchContent_Declare(googletest URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.zip)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
+# for windows: prevent overriding the parent project's compiler/linker settings
 set(gtest_force_shared_crt
     ON
     CACHE BOOL "" FORCE
