@@ -3,7 +3,7 @@ DEFAULT_BUILD_DIR := $(PWD)/build/default
 run: lint
 	cmake -B $(DEFAULT_BUILD_DIR) -S . -DCMAKE_CXX_COMPILER=$(shell which clang++)
 	cmake --build $(DEFAULT_BUILD_DIR) -j$(shell sysctl -n hw.ncpu)
-	ASAN_OPTIONS=detect_leaks=1 LSAN_OPTIONS=suppressions=$(PWD)/suppressions-asan.txt $(DEFAULT_BUILD_DIR)/binary
+	ASAN_OPTIONS=detect_leaks=1 LSAN_OPTIONS=suppressions=$(PWD)/suppressions-asan.txt:print_suppressions=0 $(DEFAULT_BUILD_DIR)/binary
 
 RELEASE_BUILD_DIR := $(PWD)/build/release
 .PHONY: run-release
