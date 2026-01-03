@@ -21,7 +21,6 @@ struct GameState {
     Texture2D texture;
     bool mesh_generated;
 };
-
 GameState STATE = GameState{
     .ball_pos = {60.0f, 10.0f, 60.0f},
     .ball_vel = {0.0f, 0.0f, 0.0f},
@@ -39,33 +38,40 @@ GameState STATE = GameState{
     .mesh_generated = false,
 };
 
+/** regenerates the terrain mesh from procedural data and uploads it to the GPU */
 void generate_terrain_mesh() {
+    // clean up previous mesh if it exists
     if (STATE.terrain_mesh.vertexCount > 0) {
         UnloadMesh(STATE.terrain_mesh);
     }
 
     STATE.terrain_mesh = generate_terrain_mesh_data();
 
+    // upload mesh to GPU and assign the texture
     UploadMesh(&STATE.terrain_mesh, false);
     STATE.terrain_model = LoadModelFromMesh(STATE.terrain_mesh);
     STATE.terrain_model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = STATE.texture;
     STATE.mesh_generated = true;
 }
 
+/** updates ball position and velocity based on gravity and terrain collisions */
 void update_physics(float dt) {
     assert(!isnan(dt));
     assert(dt >= 0.0f);
     assert(dt < 1.0f);
     constexpr Vector3 gravity{0.0f, -20.0f, 0.0f};
 
+    // apply gravity
     STATE.ball_vel.x += gravity.x * dt;
     STATE.ball_vel.y += gravity.y * dt;
     STATE.ball_vel.z += gravity.z * dt;
 
+    // integrate position
     STATE.ball_pos.x += STATE.ball_vel.x * dt;
     STATE.ball_pos.y += STATE.ball_vel.y * dt;
     STATE.ball_pos.z += STATE.ball_vel.z * dt;
 
+    // respawn if fell off the world
     if (STATE.ball_pos.y < -50.0f) {
         STATE.ball_pos = {60.0f, 10.0f, 60.0f};
         STATE.ball_vel = {0.0f, 0.0f, 0.0f};
@@ -73,8 +79,12 @@ void update_physics(float dt) {
 
     const float terrain_h = get_terrain_height(STATE.ball_pos.x, STATE.ball_pos.z);
 
+    // collision with terrain
     if (STATE.ball_pos.y <= terrain_h + BALL_RADIUS) {
+        // clamp to surface
         STATE.ball_pos.y = terrain_h + BALL_RADIUS;
+
+        // velocity vector based on terrain normal
         const Vector3 normal = get_terrain_normal(STATE.ball_pos.x, STATE.ball_pos.z);
         const float dot = STATE.ball_vel.x * normal.x + STATE.ball_vel.y * normal.y + STATE.ball_vel.z * normal.z;
 
@@ -82,17 +92,21 @@ void update_physics(float dt) {
         STATE.ball_vel.y -= dot * normal.y;
         STATE.ball_vel.z -= dot * normal.z;
 
+        // friction/damping
         STATE.ball_vel.x *= 0.99f;
         STATE.ball_vel.z *= 0.99f;
     }
 }
 
 void game_loop() {
+    // lazy init of terrain
     if (!STATE.mesh_generated) {
         generate_terrain_mesh();
     }
 
     DrawFPS(10, 10);
+
+    // update physics with clamped delta time
     float dt = GetFrameTime();
     if (dt > 0.05f) {
         dt = 0.05f;
@@ -100,9 +114,11 @@ void game_loop() {
 
     update_physics(dt);
 
+    // update camera to follow ball
     STATE.camera.target = STATE.ball_pos;
     STATE.camera.position = {STATE.ball_pos.x, STATE.ball_pos.y + 15.0f, STATE.ball_pos.z + 15.0f};
 
+    // render scene
     BeginDrawing();
     ClearBackground(SKYBLUE);
     BeginMode3D(STATE.camera);
@@ -122,6 +138,7 @@ std::int32_t main() {
     InitWindow(800, 450, "raycer");
     SetTargetFPS(60);
 
+    // checkerboard texture for the terrain
     Image checked = GenImageChecked(256, 256, 128, 128, DARKGRAY, WHITE);
     Texture2D texture = LoadTextureFromImage(checked);
     assert(texture.id != 0);
@@ -132,6 +149,7 @@ std::int32_t main() {
         game_loop();
     }
 
+    // cleanup
     UnloadModel(STATE.terrain_model);
     UnloadTexture(STATE.texture);
     CloseWindow();
