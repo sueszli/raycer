@@ -1,4 +1,5 @@
 checkersReport
 missingIncludeSystem
 
-syntaxError:*/raylib.h
+*:*_deps/*
+toomanyconfigs
