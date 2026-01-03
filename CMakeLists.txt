@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.27 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 project(defer LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -21,6 +21,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_link_options(-L${LIBCXX_DIR} -Wl,-rpath,${LIBCXX_DIR})
   endif()
 endif()
+
+#
+# arguments
+#
 
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
   message(STATUS "Defaulting build type to Debug.")
