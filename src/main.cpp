@@ -12,10 +12,10 @@
 namespace {
 
 constexpr float BALL_RADIUS = 0.5f;
-constexpr Vector3 PHYS_GRAVITY{0.0f, -20.0f, 0.0f};
-constexpr float PHYS_MOVE_FORCE = 40.0f;
+constexpr Vector3 PHYS_GRAVITY{0.0f, -150.0f, 0.0f}; // gravitational force
+constexpr float PHYS_MOVE_FORCE = 80.0f;             // player control force
 constexpr float PHYS_JUMP_FORCE = 500.0f;
-constexpr float PHYS_DRAG = 0.98f;
+constexpr float PHYS_DRAG = 0.98f; // drag coefficient
 
 struct GameState {
     Vector3 ball_pos = {60.0f, 20.0f, 60.0f};
@@ -61,8 +61,25 @@ void update_physics_mut(GameState *state, float dt) {
     assert(dt >= 0.0f);
     assert(dt < 1.0f);
 
-    // apply gravity
-    state->ball_vel = Vector3Add(state->ball_vel, Vector3Scale(PHYS_GRAVITY, dt));
+    // handle ground collision first to get terrain normal
+    float terrain_h = get_terrain_height(state->ball_pos.x, state->ball_pos.z);
+    bool on_ground = (state->ball_pos.y <= terrain_h + BALL_RADIUS);
+
+    // apply gravity (decomposed based on terrain slope if on ground)
+    if (on_ground) {
+        // get terrain normal and decompose gravity into parallel and perpendicular components
+        Vector3 terrain_normal = get_terrain_normal(state->ball_pos.x, state->ball_pos.z);
+
+        // project gravity onto the terrain surface (parallel component)
+        float dot = Vector3DotProduct(PHYS_GRAVITY, terrain_normal);
+        Vector3 gravity_parallel = Vector3Subtract(PHYS_GRAVITY, Vector3Scale(terrain_normal, dot));
+
+        // apply only the parallel component to make ball roll down slopes
+        state->ball_vel = Vector3Add(state->ball_vel, Vector3Scale(gravity_parallel, dt));
+    } else {
+        // in air: apply full gravity
+        state->ball_vel = Vector3Add(state->ball_vel, Vector3Scale(PHYS_GRAVITY, dt));
+    }
 
     // handle input (relative to camera)
     Vector3 cam_fwd = Vector3Subtract(state->camera.target, state->camera.position);
@@ -89,9 +106,9 @@ void update_physics_mut(GameState *state, float dt) {
     // update position from velocity
     state->ball_pos = Vector3Add(state->ball_pos, Vector3Scale(state->ball_vel, dt));
 
-    // handle ground collision
-    float terrain_h = get_terrain_height(state->ball_pos.x, state->ball_pos.z);
-    bool on_ground = (state->ball_pos.y <= terrain_h + BALL_RADIUS);
+    // recheck ground collision after movement
+    terrain_h = get_terrain_height(state->ball_pos.x, state->ball_pos.z);
+    on_ground = (state->ball_pos.y <= terrain_h + BALL_RADIUS);
 
     if (IsKeyPressed(KEY_SPACE) && on_ground) {
         state->ball_vel.y += PHYS_JUMP_FORCE * dt;
@@ -129,7 +146,7 @@ void game_loop_mut(GameState *state) {
         generate_terrain_mesh_mut(state);
     }
 
-    // update physics with clamped delta time
+    // update physics
     float dt = GetFrameTime();
     if (dt > 0.05f) {
         dt = 0.05f;
@@ -140,7 +157,7 @@ void game_loop_mut(GameState *state) {
     state->camera.target = state->ball_pos;
     state->camera.position = {state->ball_pos.x, state->ball_pos.y + 15.0f, state->ball_pos.z + 15.0f};
 
-    // render scene
+    // render
     BeginDrawing();
     ClearBackground(SKYBLUE);
     DrawFPS(10, 10);
