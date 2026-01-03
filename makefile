@@ -29,6 +29,7 @@ run-leaks: lint
 WASM_BUILD_DIR := $(PWD)/build/wasm
 .PHONY: wasm
 wasm:
+	rm -rf $(WASM_BUILD_DIR)
 	mkdir -p $(WASM_BUILD_DIR)
 	docker run --rm \
 		-v $(PWD):/src \
