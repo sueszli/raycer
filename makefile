@@ -1,20 +1,20 @@
 DEFAULT_BUILD_DIR := $(PWD)/build/default
 .PHONY: run
-run: lint
+run: lint fmt
 	cmake -B $(DEFAULT_BUILD_DIR) -S . -DCMAKE_CXX_COMPILER=$(shell which clang++)
 	cmake --build $(DEFAULT_BUILD_DIR) -j$(shell sysctl -n hw.ncpu)
 	ASAN_OPTIONS=detect_leaks=1 LSAN_OPTIONS=suppressions=$(PWD)/suppressions-asan.txt:print_suppressions=0 $(DEFAULT_BUILD_DIR)/binary
 
 RELEASE_BUILD_DIR := $(PWD)/build/release
 .PHONY: run-release
-run-release: lint
+run-release: lint fmt
 	cmake -B $(RELEASE_BUILD_DIR) -S . -DCMAKE_CXX_COMPILER=$(shell which clang++) -DCMAKE_BUILD_TYPE=Release -DDISABLE_ASAN=ON -DDISABLE_UBSAN=ON -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(RELEASE_BUILD_DIR) -j$(shell sysctl -n hw.ncpu)
 	$(RELEASE_BUILD_DIR)/binary
 
 LEAKS_BUILD_DIR := $(PWD)/build/leaks
 .PHONY: leaks
-leaks: lint
+leaks: lint fmt
 	cmake -B $(LEAKS_BUILD_DIR) -S . -DDISABLE_ASAN=ON
 	cmake --build $(LEAKS_BUILD_DIR) -j$(shell sysctl -n hw.ncpu)
 	codesign -s - -f --entitlements entitlements.plist $(LEAKS_BUILD_DIR)/binary

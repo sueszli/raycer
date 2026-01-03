@@ -48,7 +48,6 @@ class PerlinNoise {
         const std::int32_t BA = p[static_cast<size_t>(B)] + Z;
         const std::int32_t BB = p[static_cast<size_t>(B) + 1] + Z;
 
-        // (3) Safety: Assertions
         assert(static_cast<size_t>(AA + 1) < p.size());
         assert(static_cast<size_t>(BB + 1) < p.size());
 
@@ -153,7 +152,7 @@ void generate_terrain_mesh(GameState &state) {
             PushVert(x3, y3, z3, n1.x, n1.y, n1.z, 0.0f, 1.0f); // V3
             PushVert(x2, y2, z2, n1.x, n1.y, n1.z, 1.0f, 0.0f); // V2
 
-            const Vector3 n2 = {0.0f, 1.0f, 0.0f};              // Simplified normal for second tri for visual distinction
+            const Vector3 n2 = {0.0f, 1.0f, 0.0f};
             PushVert(x2, y2, z2, n2.x, n2.y, n2.z, 1.0f, 0.0f); // V2
             PushVert(x3, y3, z3, n2.x, n2.y, n2.z, 0.0f, 1.0f); // V3
             PushVert(x4, y4, z4, n2.x, n2.y, n2.z, 1.0f, 1.0f); // V4
