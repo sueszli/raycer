@@ -133,7 +133,7 @@ void generate_terrain_mesh(GameState &state) {
             const Vector3 n1 = get_terrain_normal(state.noise_gen, x1, z1);
 
             auto PushVert = [&](float px, float py, float pz, float nx, float ny, float nz, float u, float v) {
-                state.terrain_mesh.vertices[vCounter * 3] = px; // NOLINT
+                state.terrain_mesh.vertices[vCounter * 3] = px;
                 state.terrain_mesh.vertices[vCounter * 3 + 1] = py;
                 state.terrain_mesh.vertices[vCounter * 3 + 2] = pz;
                 state.terrain_mesh.normals[vCounter * 3] = nx;
