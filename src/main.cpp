@@ -23,7 +23,7 @@ class PerlinNoise {
     explicit PerlinNoise(std::int32_t seed = 0) {
         p.resize(256);
         std::iota(p.begin(), p.end(), 0);
-        std::default_random_engine engine(seed);
+        std::default_random_engine engine(static_cast<std::default_random_engine::result_type>(seed));
         std::shuffle(p.begin(), p.end(), engine);
         p.insert(p.end(), p.begin(), p.end());
     }
