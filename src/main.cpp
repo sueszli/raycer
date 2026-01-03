@@ -1,7 +1,9 @@
 #include "raylib.h"
 #include <cstdlib>
 
-int main() {
+#include <cstdint>
+
+std::int32_t main() {
     InitWindow(800, 450, "raycer");
 
     Vector3 carPosition = {0.0f, 0.0f, 0.0f};
