@@ -22,7 +22,7 @@ struct GameState {
     bool mesh_generated;
 };
 
-GameState state = GameState{
+GameState STATE = GameState{
     .ball_pos = {60.0f, 10.0f, 60.0f},
     .ball_vel = {0.0f, 0.0f, 0.0f},
     .camera =
@@ -40,16 +40,16 @@ GameState state = GameState{
 };
 
 void generate_terrain_mesh() {
-    if (state.terrain_mesh.vertexCount > 0) {
-        UnloadMesh(state.terrain_mesh);
+    if (STATE.terrain_mesh.vertexCount > 0) {
+        UnloadMesh(STATE.terrain_mesh);
     }
 
-    state.terrain_mesh = generate_terrain_mesh_data();
+    STATE.terrain_mesh = generate_terrain_mesh_data();
 
-    UploadMesh(&state.terrain_mesh, false);
-    state.terrain_model = LoadModelFromMesh(state.terrain_mesh);
-    state.terrain_model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = state.texture;
-    state.mesh_generated = true;
+    UploadMesh(&STATE.terrain_mesh, false);
+    STATE.terrain_model = LoadModelFromMesh(STATE.terrain_mesh);
+    STATE.terrain_model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = STATE.texture;
+    STATE.mesh_generated = true;
 }
 
 void update_physics(float dt) {
@@ -57,37 +57,37 @@ void update_physics(float dt) {
     assert(dt < 1.0f);
     constexpr Vector3 gravity{0.0f, -20.0f, 0.0f};
 
-    state.ball_vel.x += gravity.x * dt;
-    state.ball_vel.y += gravity.y * dt;
-    state.ball_vel.z += gravity.z * dt;
+    STATE.ball_vel.x += gravity.x * dt;
+    STATE.ball_vel.y += gravity.y * dt;
+    STATE.ball_vel.z += gravity.z * dt;
 
-    state.ball_pos.x += state.ball_vel.x * dt;
-    state.ball_pos.y += state.ball_vel.y * dt;
-    state.ball_pos.z += state.ball_vel.z * dt;
+    STATE.ball_pos.x += STATE.ball_vel.x * dt;
+    STATE.ball_pos.y += STATE.ball_vel.y * dt;
+    STATE.ball_pos.z += STATE.ball_vel.z * dt;
 
-    if (state.ball_pos.y < -50.0f) {
-        state.ball_pos = {60.0f, 10.0f, 60.0f};
-        state.ball_vel = {0.0f, 0.0f, 0.0f};
+    if (STATE.ball_pos.y < -50.0f) {
+        STATE.ball_pos = {60.0f, 10.0f, 60.0f};
+        STATE.ball_vel = {0.0f, 0.0f, 0.0f};
     }
 
-    const float terrain_h = get_terrain_height(state.ball_pos.x, state.ball_pos.z);
+    const float terrain_h = get_terrain_height(STATE.ball_pos.x, STATE.ball_pos.z);
 
-    if (state.ball_pos.y <= terrain_h + BALL_RADIUS) {
-        state.ball_pos.y = terrain_h + BALL_RADIUS;
-        const Vector3 normal = get_terrain_normal(state.ball_pos.x, state.ball_pos.z);
-        const float dot = state.ball_vel.x * normal.x + state.ball_vel.y * normal.y + state.ball_vel.z * normal.z;
+    if (STATE.ball_pos.y <= terrain_h + BALL_RADIUS) {
+        STATE.ball_pos.y = terrain_h + BALL_RADIUS;
+        const Vector3 normal = get_terrain_normal(STATE.ball_pos.x, STATE.ball_pos.z);
+        const float dot = STATE.ball_vel.x * normal.x + STATE.ball_vel.y * normal.y + STATE.ball_vel.z * normal.z;
 
-        state.ball_vel.x -= dot * normal.x;
-        state.ball_vel.y -= dot * normal.y;
-        state.ball_vel.z -= dot * normal.z;
+        STATE.ball_vel.x -= dot * normal.x;
+        STATE.ball_vel.y -= dot * normal.y;
+        STATE.ball_vel.z -= dot * normal.z;
 
-        state.ball_vel.x *= 0.99f;
-        state.ball_vel.z *= 0.99f;
+        STATE.ball_vel.x *= 0.99f;
+        STATE.ball_vel.z *= 0.99f;
     }
 }
 
 void game_loop() {
-    if (!state.mesh_generated) {
+    if (!STATE.mesh_generated) {
         generate_terrain_mesh();
     }
 
@@ -98,17 +98,17 @@ void game_loop() {
 
     update_physics(dt);
 
-    state.camera.target = state.ball_pos;
-    state.camera.position = {state.ball_pos.x, state.ball_pos.y + 15.0f, state.ball_pos.z + 15.0f};
+    STATE.camera.target = STATE.ball_pos;
+    STATE.camera.position = {STATE.ball_pos.x, STATE.ball_pos.y + 15.0f, STATE.ball_pos.z + 15.0f};
 
     BeginDrawing();
     ClearBackground(SKYBLUE);
-    BeginMode3D(state.camera);
+    BeginMode3D(STATE.camera);
 
-    DrawModel(state.terrain_model, {0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
+    DrawModel(STATE.terrain_model, {0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
     DrawGrid(GRID_SIZE, 10.0f);
-    DrawSphere(state.ball_pos, BALL_RADIUS, RED);
-    DrawSphereWires(state.ball_pos, BALL_RADIUS, 16, 16, MAROON);
+    DrawSphere(STATE.ball_pos, BALL_RADIUS, RED);
+    DrawSphereWires(STATE.ball_pos, BALL_RADIUS, 16, 16, MAROON);
 
     EndMode3D();
     EndDrawing();
@@ -124,14 +124,14 @@ std::int32_t main() {
     Texture2D texture = LoadTextureFromImage(checked);
     assert(texture.id != 0);
     UnloadImage(checked);
-    state.texture = texture;
+    STATE.texture = texture;
 
     while (!WindowShouldClose()) {
         game_loop();
     }
 
-    UnloadModel(state.terrain_model);
-    UnloadTexture(state.texture);
+    UnloadModel(STATE.terrain_model);
+    UnloadTexture(STATE.texture);
     CloseWindow();
 
     return EXIT_SUCCESS;
