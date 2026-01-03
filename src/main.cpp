@@ -174,11 +174,19 @@ std::int32_t main() {
 
     GameState state{};
 
-    // checkerboard texture for the terrain
-    Image checked = GenImageChecked(256, 256, 128, 128, DARKGREEN, GREEN);
-    Texture2D texture = LoadTextureFromImage(checked);
+    // large stripe texture for the terrain (easier on eyes at high speeds)
+    Image stripes = GenImageColor(256, 256, DARKGREEN);
+    for (int y = 0; y < 256; y++) {
+        for (int x = 0; x < 256; x++) {
+            // create horizontal stripes every 64 pixels
+            if ((y / 64) % 2 == 0) {
+                ImageDrawPixel(&stripes, x, y, GREEN);
+            }
+        }
+    }
+    Texture2D texture = LoadTextureFromImage(stripes);
     assert(texture.id != 0);
-    UnloadImage(checked);
+    UnloadImage(stripes);
     state.texture = texture;
 
     while (!WindowShouldClose()) {
