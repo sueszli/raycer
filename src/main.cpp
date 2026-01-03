@@ -12,17 +12,14 @@
 namespace {
 
 constexpr float BALL_RADIUS = 0.5f;
-constexpr float PHYS_MASS = 1.0f;
-constexpr float PHYS_DRAG_AIR = 0.999f;
-constexpr float PHYS_DRAG_GROUND = 0.95f;
 constexpr Vector3 PHYS_GRAVITY{0.0f, -20.0f, 0.0f};
 constexpr float PHYS_MOVE_FORCE = 40.0f;
 constexpr float PHYS_JUMP_FORCE = 500.0f;
+constexpr float PHYS_DRAG = 0.98f;
 
 struct GameState {
-    Vector3 ball_pos = {60.0f, 20.0f, 60.0f}; // Start higher to drop
+    Vector3 ball_pos = {60.0f, 20.0f, 60.0f};
     Vector3 ball_vel = {0.0f, 0.0f, 0.0f};
-    Quaternion ball_rot = QuaternionIdentity(); // For visual rolling
 
     Camera3D camera = {
         .position = {0.0f, 10.0f, 10.0f},
@@ -40,7 +37,6 @@ struct GameState {
     float terrain_offset_z = 0.0f;
 };
 
-/** regenerates the terrain mesh from procedural data and uploads it to the GPU */
 void generate_terrain_mesh_mut(GameState *state) {
     assert(state != nullptr);
 
@@ -65,22 +61,17 @@ void update_physics_mut(GameState *state, float dt) {
     assert(dt >= 0.0f);
     assert(dt < 1.0f);
 
-    // (2) accumulate forces
-    Vector3 total_force = {0.0f, 0.0f, 0.0f};
+    // apply gravity
+    state->ball_vel = Vector3Add(state->ball_vel, Vector3Scale(PHYS_GRAVITY, dt));
 
-    // gravity
-    total_force = Vector3Add(total_force, Vector3Scale(PHYS_GRAVITY, PHYS_MASS));
-
-    // input forces (relative to camera)
-    Vector3 input_dir = {0.0f, 0.0f, 0.0f};
-
-    // get camera forward/right vectors flattened on XZ plane
+    // handle input (relative to camera)
     Vector3 cam_fwd = Vector3Subtract(state->camera.target, state->camera.position);
     cam_fwd.y = 0.0f;
     cam_fwd = Vector3Normalize(cam_fwd);
     Vector3 cam_right = Vector3CrossProduct(cam_fwd, {0.0f, 1.0f, 0.0f});
     cam_right = Vector3Normalize(cam_right);
 
+    Vector3 input_dir = {0.0f, 0.0f, 0.0f};
     if (IsKeyDown(KEY_W))
         input_dir = Vector3Add(input_dir, cam_fwd);
     if (IsKeyDown(KEY_S))
@@ -92,63 +83,29 @@ void update_physics_mut(GameState *state, float dt) {
 
     if (Vector3Length(input_dir) > 0.1f) {
         input_dir = Vector3Normalize(input_dir);
-        total_force = Vector3Add(total_force, Vector3Scale(input_dir, PHYS_MOVE_FORCE));
+        state->ball_vel = Vector3Add(state->ball_vel, Vector3Scale(input_dir, PHYS_MOVE_FORCE * dt));
     }
 
-    // (2) integration (symplectic euler)
-    // a = F / m
-    Vector3 acc = total_force;
+    // update position from velocity
+    state->ball_pos = Vector3Add(state->ball_pos, Vector3Scale(state->ball_vel, dt));
 
-    // v += a * dt
-    state->ball_vel = Vector3Add(state->ball_vel, Vector3Scale(acc, dt));
-
-    // (3) collision & constraints
+    // handle ground collision
     float terrain_h = get_terrain_height(state->ball_pos.x, state->ball_pos.z);
     bool on_ground = (state->ball_pos.y <= terrain_h + BALL_RADIUS);
 
-    // jump (only when on ground or slightly above)
-    if (on_ground && IsKeyPressed(KEY_SPACE)) {
-        state->ball_vel.y += PHYS_JUMP_FORCE * dt; // apply instant impulse
-        on_ground = false;                         // detach immediately
+    if (IsKeyPressed(KEY_SPACE) && on_ground) {
+        state->ball_vel.y += PHYS_JUMP_FORCE * dt;
     }
 
     if (on_ground) {
-        // clamp to surface (simple approach, prevent sinking)
         state->ball_pos.y = terrain_h + BALL_RADIUS;
-
-        // normal force logic: remove velocity component opposing the normal
-        Vector3 normal = get_terrain_normal(state->ball_pos.x, state->ball_pos.z);
-
-        // v_normal = dot(v, n) * n
-        float v_dot_n = Vector3DotProduct(state->ball_vel, normal);
-
-        // if moving into the terrain, cancel that component (slide)
-        if (v_dot_n < 0.0f) {
-            state->ball_vel = Vector3Subtract(state->ball_vel, Vector3Scale(normal, v_dot_n));
+        if (state->ball_vel.y < 0.0f) {
+            state->ball_vel.y = 0.0f;
         }
-
-        // apply ground friction
-        state->ball_vel = Vector3Scale(state->ball_vel, PHYS_DRAG_GROUND);
-    } else {
-        // apply air resistance
-        state->ball_vel = Vector3Scale(state->ball_vel, PHYS_DRAG_AIR);
     }
 
-    // (4) update position: p += v * dt
-    state->ball_pos = Vector3Add(state->ball_pos, Vector3Scale(state->ball_vel, dt));
-
-    // (5) update visual rotation (rolling)
-    float speed = Vector3Length(state->ball_vel);
-    if (speed > 0.01f) {
-        Vector3 move_dir = Vector3Normalize(state->ball_vel);
-        Vector3 rot_axis = Vector3CrossProduct({0.0f, 1.0f, 0.0f}, move_dir);
-        rot_axis = Vector3Normalize(rot_axis);
-
-        float angle = -speed * dt / BALL_RADIUS; // Negative to roll 'forward'
-        Quaternion q_rot = QuaternionFromAxisAngle(rot_axis, angle);
-        state->ball_rot = QuaternionMultiply(q_rot, state->ball_rot);
-        state->ball_rot = QuaternionNormalize(state->ball_rot);
-    }
+    // apply drag
+    state->ball_vel = Vector3Scale(state->ball_vel, PHYS_DRAG);
 }
 
 void game_loop_mut(GameState *state) {
@@ -159,29 +116,24 @@ void game_loop_mut(GameState *state) {
         generate_terrain_mesh_mut(state);
     }
 
-    // check if we need to regenerate terrain
-    // center of current mesh relative to world
-    const float half_size = (GRID_SIZE - 1) * 0.5f; // TILE_SIZE is 1.0f implicitly
+    // regenerate terrain
+    // if player is more than 30 units away from center (grid is ~120 wide)
+    const float half_size = (GRID_SIZE - 1) * 0.5f;
     const float center_x = state->terrain_offset_x + half_size;
     const float center_z = state->terrain_offset_z + half_size;
     const float dist_x = std::abs(state->ball_pos.x - center_x);
     const float dist_z = std::abs(state->ball_pos.z - center_z);
-
-    // regenerate if player is more than 30 units away from center (grid is ~120 wide)
     if (dist_x > 30.0f || dist_z > 30.0f) {
         state->terrain_offset_x = std::floor(state->ball_pos.x - half_size);
         state->terrain_offset_z = std::floor(state->ball_pos.z - half_size);
         generate_terrain_mesh_mut(state);
     }
 
-    DrawFPS(10, 10);
-
     // update physics with clamped delta time
     float dt = GetFrameTime();
     if (dt > 0.05f) {
         dt = 0.05f;
     }
-
     update_physics_mut(state, dt);
 
     // update camera to follow ball
@@ -190,31 +142,13 @@ void game_loop_mut(GameState *state) {
 
     // render scene
     BeginDrawing();
-
-    // gradient sky
-    DrawRectangleGradientV(0, 0, GetScreenWidth(), GetScreenHeight(), SKYBLUE, {0, 50, 100, 255});
+    ClearBackground(SKYBLUE);
+    DrawFPS(10, 10);
 
     BeginMode3D(state->camera);
 
     DrawModel(state->terrain_model, {state->terrain_offset_x, 0.0f, state->terrain_offset_z}, 1.0f, WHITE);
-
-    // draw shadow blob
-    float shadow_y = get_terrain_height(state->ball_pos.x, state->ball_pos.z) + 0.1f;
-    DrawCylinder({state->ball_pos.x, shadow_y, state->ball_pos.z}, BALL_RADIUS, BALL_RADIUS, 0.01f, 16, {0, 0, 0, 100});
-
-    // draw ball with rotation
-    rlPushMatrix();
-    rlTranslatef(state->ball_pos.x, state->ball_pos.y, state->ball_pos.z);
-
-    Vector3 axis;
-    float angle;
-    QuaternionToAxisAngle(state->ball_rot, &axis, &angle);
-    rlRotatef(angle * RAD2DEG, axis.x, axis.y, axis.z);
-
-    DrawSphere({0, 0, 0}, BALL_RADIUS, RED);
-    DrawSphereWires({0, 0, 0}, BALL_RADIUS, 16, 16, MAROON); // wires help visualize rotation
-
-    rlPopMatrix();
+    DrawSphere(state->ball_pos, BALL_RADIUS, RED);
 
     EndMode3D();
     EndDrawing();

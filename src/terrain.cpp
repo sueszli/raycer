@@ -93,7 +93,7 @@ Vector3 get_terrain_normal(float x, float z) {
     return {normal.x / len, normal.y / len, normal.z / len};
 }
 
-// builds the mesh buffers for the grid
+/** builds the mesh buffers for the grid */
 Mesh generate_terrain_mesh_data(float offset_x, float offset_z) {
     Mesh mesh{};
     // each grid cell has two triangles
