@@ -1,50 +1,246 @@
 #include "raylib.h"
 #include "rlgl.h"
+
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <numeric>
+#include <random>
+#include <vector>
 
-Vector3 ball_pos = {0.0f, 1.0f, 0.0f};
-Camera3D camera = {{0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, 45.0f, CAMERA_PERSPECTIVE};
+namespace {
 
-void game_loop() {
+constexpr std::int32_t GRID_SIZE = 120;
+constexpr float TILE_SIZE = 1.0f;
+constexpr float NOISE_SCALE = 0.1f;
+constexpr float TERRAIN_HEIGHT_SCALE = 10.0f;
+constexpr float BALL_RADIUS = 0.5f;
+
+class PerlinNoise {
+  public:
+    explicit PerlinNoise(std::int32_t seed = 0) {
+        p.resize(256);
+        std::iota(p.begin(), p.end(), 0);
+        std::default_random_engine engine(seed);
+        std::shuffle(p.begin(), p.end(), engine);
+        p.insert(p.end(), p.begin(), p.end());
+    }
+
+    [[nodiscard]] float noise(float x, float y, float z) const {
+        const std::int32_t X = (std::int32_t)std::floor(x) & 255;
+        const std::int32_t Y = (std::int32_t)std::floor(y) & 255;
+        const std::int32_t Z = (std::int32_t)std::floor(z) & 255;
+
+        x -= std::floor(x);
+        y -= std::floor(y);
+        z -= std::floor(z);
+
+        const float u = fade(x);
+        const float v = fade(y);
+        const float w = fade(z);
+
+        const std::int32_t A = p[static_cast<size_t>(X)] + Y;
+        const std::int32_t AA = p[static_cast<size_t>(A)] + Z;
+        const std::int32_t AB = p[static_cast<size_t>(A) + 1] + Z;
+        const std::int32_t B = p[static_cast<size_t>(X) + 1] + Y;
+        const std::int32_t BA = p[static_cast<size_t>(B)] + Z;
+        const std::int32_t BB = p[static_cast<size_t>(B) + 1] + Z;
+
+        // (3) Safety: Assertions
+        assert(static_cast<size_t>(AA + 1) < p.size());
+        assert(static_cast<size_t>(BB + 1) < p.size());
+
+        return lerp(w, lerp(v, lerp(u, grad(p[static_cast<size_t>(AA)], x, y, z), grad(p[static_cast<size_t>(BA)], x - 1, y, z)), lerp(u, grad(p[static_cast<size_t>(AB)], x, y - 1, z), grad(p[static_cast<size_t>(BB)], x - 1, y - 1, z))), lerp(v, lerp(u, grad(p[static_cast<size_t>(AA) + 1], x, y, z - 1), grad(p[static_cast<size_t>(BA) + 1], x - 1, y, z - 1)), lerp(u, grad(p[static_cast<size_t>(AB) + 1], x, y - 1, z - 1), grad(p[static_cast<size_t>(BB) + 1], x - 1, y - 1, z - 1))));
+    }
+
+    [[nodiscard]] float noise(float x, float y) const { return noise(x, y, 0.0f); }
+
+  private:
+    std::vector<std::int32_t> p;
+
+    static float fade(float t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    static float lerp(float t, float a, float b) { return a + t * (b - a); }
+    static float grad(std::int32_t hash, float x, float y, float z) {
+        const std::int32_t h = hash & 15;
+        const float u = h < 8 ? x : y;
+        const float v = h < 4 ? y : h == 12 || h == 14 ? x : z;
+        return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
+    }
+};
+
+struct GameState {
+    Vector3 ball_pos{60.0f, 10.0f, 60.0f};
+    Vector3 ball_vel{0.0f, 0.0f, 0.0f};
+    Camera3D camera{{0.0f, 10.0f, 10.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 45.0f, CAMERA_PERSPECTIVE};
+    Mesh terrain_mesh{};
+    Model terrain_model{};
+    bool mesh_generated{false};
+    PerlinNoise noise_gen{12345};
+};
+
+[[nodiscard]] float get_terrain_height(const PerlinNoise &noise, float x, float z) { return noise.noise(x * NOISE_SCALE, z * NOISE_SCALE) * TERRAIN_HEIGHT_SCALE; }
+
+[[nodiscard]] Vector3 get_terrain_normal(const PerlinNoise &noise, float x, float z) {
+    const float h = get_terrain_height(noise, x, z);
+    constexpr float step = 0.1f;
+    const float h_x = get_terrain_height(noise, x + step, z);
+    const float h_z = get_terrain_height(noise, x, z + step);
+
+    const Vector3 v1 = {step, h_x - h, 0.0f};
+    const Vector3 v2 = {0.0f, h_z - h, step};
+
+    const Vector3 normal = {v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x};
+
+    const float len = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+    return {normal.x / len, normal.y / len, normal.z / len};
+}
+
+void generate_terrain_mesh(GameState &state) {
+    if (state.terrain_mesh.vertexCount > 0) {
+        UnloadMesh(state.terrain_mesh);
+    }
+
+    state.terrain_mesh = {};
+    state.terrain_mesh.triangleCount = (GRID_SIZE - 1) * (GRID_SIZE - 1) * 2;
+    state.terrain_mesh.vertexCount = state.terrain_mesh.triangleCount * 3;
+
+    state.terrain_mesh.vertices = static_cast<float *>(MemAlloc(static_cast<std::uint32_t>(state.terrain_mesh.vertexCount) * 3 * sizeof(float)));
+    state.terrain_mesh.normals = static_cast<float *>(MemAlloc(static_cast<std::uint32_t>(state.terrain_mesh.vertexCount) * 3 * sizeof(float)));
+    state.terrain_mesh.texcoords = static_cast<float *>(MemAlloc(static_cast<std::uint32_t>(state.terrain_mesh.vertexCount) * 2 * sizeof(float)));
+    state.terrain_mesh.colors = static_cast<unsigned char *>(MemAlloc(static_cast<std::uint32_t>(state.terrain_mesh.vertexCount) * 4 * sizeof(unsigned char)));
+
+    assert(state.terrain_mesh.vertices != nullptr);
+
+    std::int32_t vCounter = 0;
+
+    for (std::int32_t z = 0; z < GRID_SIZE - 1; z++) {
+        for (std::int32_t x = 0; x < GRID_SIZE - 1; x++) {
+            const float x1 = static_cast<float>(x) * TILE_SIZE;
+            const float z1 = static_cast<float>(z) * TILE_SIZE;
+            const float x2 = static_cast<float>(x + 1) * TILE_SIZE;
+            const float z2 = static_cast<float>(z) * TILE_SIZE;
+            const float x3 = static_cast<float>(x) * TILE_SIZE;
+            const float z3 = static_cast<float>(z + 1) * TILE_SIZE;
+            const float x4 = static_cast<float>(x + 1) * TILE_SIZE;
+            const float z4 = static_cast<float>(z + 1) * TILE_SIZE;
+
+            const float y1 = get_terrain_height(state.noise_gen, x1, z1);
+            const float y2 = get_terrain_height(state.noise_gen, x2, z2);
+            const float y3 = get_terrain_height(state.noise_gen, x3, z3);
+            const float y4 = get_terrain_height(state.noise_gen, x4, z4);
+
+            const Vector3 n1 = get_terrain_normal(state.noise_gen, x1, z1);
+
+            auto PushVert = [&](float px, float py, float pz, float nx, float ny, float nz, float u, float v) {
+                state.terrain_mesh.vertices[vCounter * 3] = px; // NOLINT
+                state.terrain_mesh.vertices[vCounter * 3 + 1] = py;
+                state.terrain_mesh.vertices[vCounter * 3 + 2] = pz;
+                state.terrain_mesh.normals[vCounter * 3] = nx;
+                state.terrain_mesh.normals[vCounter * 3 + 1] = ny;
+                state.terrain_mesh.normals[vCounter * 3 + 2] = nz;
+                state.terrain_mesh.texcoords[vCounter * 2] = u;
+                state.terrain_mesh.texcoords[vCounter * 2 + 1] = v;
+                state.terrain_mesh.colors[vCounter * 4] = 100;
+                state.terrain_mesh.colors[vCounter * 4 + 1] = 100;
+                state.terrain_mesh.colors[vCounter * 4 + 2] = 100;
+                state.terrain_mesh.colors[vCounter * 4 + 3] = 255;
+                vCounter++;
+            };
+
+            PushVert(x1, y1, z1, n1.x, n1.y, n1.z, 0.0f, 0.0f); // V1
+            PushVert(x3, y3, z3, n1.x, n1.y, n1.z, 0.0f, 1.0f); // V3
+            PushVert(x2, y2, z2, n1.x, n1.y, n1.z, 1.0f, 0.0f); // V2
+
+            const Vector3 n2 = {0.0f, 1.0f, 0.0f};              // Simplified normal for second tri for visual distinction
+            PushVert(x2, y2, z2, n2.x, n2.y, n2.z, 1.0f, 0.0f); // V2
+            PushVert(x3, y3, z3, n2.x, n2.y, n2.z, 0.0f, 1.0f); // V3
+            PushVert(x4, y4, z4, n2.x, n2.y, n2.z, 1.0f, 1.0f); // V4
+        }
+    }
+
+    UploadMesh(&state.terrain_mesh, false);
+    state.terrain_model = LoadModelFromMesh(state.terrain_mesh);
+    state.mesh_generated = true;
+}
+
+void update_physics(GameState &state, float dt) {
+    constexpr Vector3 gravity{0.0f, -20.0f, 0.0f};
+
+    state.ball_vel.x += gravity.x * dt;
+    state.ball_vel.y += gravity.y * dt;
+    state.ball_vel.z += gravity.z * dt;
+
+    state.ball_pos.x += state.ball_vel.x * dt;
+    state.ball_pos.y += state.ball_vel.y * dt;
+    state.ball_pos.z += state.ball_vel.z * dt;
+
+    if (state.ball_pos.y < -50.0f) {
+        state.ball_pos = {60.0f, 10.0f, 60.0f};
+        state.ball_vel = {0.0f, 0.0f, 0.0f};
+    }
+
+    const float terrain_h = get_terrain_height(state.noise_gen, state.ball_pos.x, state.ball_pos.z);
+
+    assert(terrain_h < 100.0f);
+
+    if (state.ball_pos.y <= terrain_h + BALL_RADIUS) {
+        state.ball_pos.y = terrain_h + BALL_RADIUS;
+        const Vector3 normal = get_terrain_normal(state.noise_gen, state.ball_pos.x, state.ball_pos.z);
+        const float dot = state.ball_vel.x * normal.x + state.ball_vel.y * normal.y + state.ball_vel.z * normal.z;
+
+        state.ball_vel.x -= dot * normal.x;
+        state.ball_vel.y -= dot * normal.y;
+        state.ball_vel.z -= dot * normal.z;
+
+        state.ball_vel.x *= 0.99f;
+        state.ball_vel.z *= 0.99f;
+    }
+}
+
+void game_loop(GameState &state) {
+    if (!state.mesh_generated) {
+        generate_terrain_mesh(state);
+    }
+
     DrawFPS(10, 10);
     float dt = GetFrameTime();
-    assert(dt >= 0.0f);
+    if (dt > 0.05f)
+        dt = 0.05f;
 
-    ball_pos.z -= 10.0f * dt;
-    camera.target = ball_pos;
-    camera.position = (Vector3){ball_pos.x, ball_pos.y + 10.0f, ball_pos.z + 10.0f};
+    update_physics(state, dt);
+
+    state.camera.target = state.ball_pos;
+    state.camera.position = (Vector3){state.ball_pos.x, state.ball_pos.y + 15.0f, state.ball_pos.z + 15.0f};
 
     BeginDrawing();
-    ClearBackground(BLACK);
-    BeginMode3D(camera);
+    ClearBackground(SKYBLUE);
+    BeginMode3D(state.camera);
 
-    // infinite grid
-    rlPushMatrix();
-    rlTranslatef(0.0f, 0.0f, roundf(ball_pos.z));
-    DrawGrid(200, 1.0f);
-    rlPopMatrix();
-
-    // rolling ball
-    rlPushMatrix();
-    rlTranslatef(ball_pos.x, ball_pos.y, ball_pos.z);
-    rlRotatef((-ball_pos.z) * (180.0f / PI), 1.0f, 0.0f, 0.0f);
-    DrawSphere(Vector3{0.0f, 0.0f, 0.0f}, 1.0f, RED);
-    DrawSphereWires(Vector3{0.0f, 0.0f, 0.0f}, 1.0f, 16, 16, MAROON);
-    rlPopMatrix();
+    DrawModel(state.terrain_model, {0.0f, 0.0f, 0.0f}, 1.0f, GREEN);
+    DrawGrid(GRID_SIZE, 10.0f);
+    DrawSphere(state.ball_pos, BALL_RADIUS, RED);
+    DrawSphereWires(state.ball_pos, BALL_RADIUS, 16, 16, MAROON);
 
     EndMode3D();
     EndDrawing();
 }
 
+} // namespace
+
 std::int32_t main() {
     InitWindow(800, 450, "raycer");
     SetTargetFPS(60);
+
+    GameState state;
+
     while (!WindowShouldClose()) {
-        game_loop();
+        game_loop(state);
     }
+
+    UnloadModel(state.terrain_model);
     CloseWindow();
+
     return EXIT_SUCCESS;
 }

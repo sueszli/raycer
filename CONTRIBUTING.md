@@ -24,7 +24,7 @@ C++ Specific:
 
 C Specific:
 
-- Use explicit types only (e.g., `int64_t`, `float64_t`), no implicit types (`int`, `float`)
+- Use explicit types only (e.g., `std::int32_t`), no implicit types (`int`)
 - Avoid architecture-dependent types (e.g., `size_t`, `long`) to ensure portability; use fixed-size explicit types instead
 - Strict Const Correctness: Pointers are `const` by default. Only drop `const` when mutation is strictly required.
 

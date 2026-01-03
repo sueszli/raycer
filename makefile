@@ -13,8 +13,8 @@ run-release: lint
 	$(RELEASE_BUILD_DIR)/binary
 
 LEAKS_BUILD_DIR := $(PWD)/build/leaks
-.PHONY: run-leaks
-run-leaks: lint
+.PHONY: leaks
+leaks: lint
 	cmake -B $(LEAKS_BUILD_DIR) -S . -DDISABLE_ASAN=ON
 	cmake --build $(LEAKS_BUILD_DIR) -j$(shell sysctl -n hw.ncpu)
 	codesign -s - -f --entitlements entitlements.plist $(LEAKS_BUILD_DIR)/binary
@@ -57,4 +57,4 @@ lint:
 .PHONY: fmt
 fmt:
 	uvx --from cmakelang cmake-format --dangle-parens --line-width 500 -i CMakeLists.txt
-	find . -type f -not -path '*/build/*' \( -name "*.cpp" -o -name "*.h" \) | xargs clang-format -i
+	find . -type f -not -path '*/build/*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format -i
