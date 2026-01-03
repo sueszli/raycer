@@ -2,6 +2,7 @@
 #include "rlgl.h"
 #include "terrain.hpp"
 
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -21,7 +22,9 @@ struct GameState {
     bool mesh_generated;
 };
 
-void generate_terrain_mesh(GameState &state) {
+GameState state;
+
+void generate_terrain_mesh() {
     if (state.terrain_mesh.vertexCount > 0) {
         UnloadMesh(state.terrain_mesh);
     }
@@ -34,7 +37,9 @@ void generate_terrain_mesh(GameState &state) {
     state.mesh_generated = true;
 }
 
-void update_physics(GameState &state, float dt) {
+void update_physics(float dt) {
+    assert(dt >= 0.0f);
+    assert(dt < 1.0f);
     constexpr Vector3 gravity{0.0f, -20.0f, 0.0f};
 
     state.ball_vel.x += gravity.x * dt;
@@ -66,9 +71,9 @@ void update_physics(GameState &state, float dt) {
     }
 }
 
-void game_loop(GameState &state) {
+void game_loop() {
     if (!state.mesh_generated) {
-        generate_terrain_mesh(state);
+        generate_terrain_mesh();
     }
 
     DrawFPS(10, 10);
@@ -76,7 +81,7 @@ void game_loop(GameState &state) {
     if (dt > 0.05f)
         dt = 0.05f;
 
-    update_physics(state, dt);
+    update_physics(dt);
 
     state.camera.target = state.ball_pos;
     state.camera.position = {state.ball_pos.x, state.ball_pos.y + 15.0f, state.ball_pos.z + 15.0f};
@@ -102,21 +107,21 @@ std::int32_t main() {
 
     Image checked = GenImageChecked(256, 256, 128, 128, DARKGRAY, WHITE);
     Texture2D texture = LoadTextureFromImage(checked);
+    assert(texture.id != 0);
     UnloadImage(checked);
 
-    GameState state{
+    state = GameState{
         .ball_pos = {60.0f, 10.0f, 60.0f},
         .ball_vel = {0.0f, 0.0f, 0.0f},
         .camera = {.position = {0.0f, 10.0f, 10.0f}, .target = {0.0f, 0.0f, 0.0f}, .up = {0.0f, 1.0f, 0.0f}, .fovy = 45.0f, .projection = CAMERA_PERSPECTIVE},
         .terrain_mesh = {},
         .terrain_model = {},
         .texture = texture,
-        .texture = texture,
         .mesh_generated = false,
     };
 
     while (!WindowShouldClose()) {
-        game_loop(state);
+        game_loop();
     }
 
     UnloadModel(state.terrain_model);
